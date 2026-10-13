@@ -1,0 +1,11 @@
+dist/
+autostart-app/build/
+autostart-app/debug.keystore
+__pycache__/
+*.pyc
+*.bin
+*.so
+*.log
+*.wav
+attach-fel-wsl.ps1
+install-recovery.sh
