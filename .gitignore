@@ -1,6 +1,5 @@
 dist/
 autostart-app/build/
-gemini-voice-app/build/
 autostart-app/debug.keystore
 __pycache__/
 *.pyc
@@ -12,4 +11,3 @@ attach-fel-wsl.ps1
 install-recovery.sh
 .research/
 .env
-autostart-app/build/gemini.properties
