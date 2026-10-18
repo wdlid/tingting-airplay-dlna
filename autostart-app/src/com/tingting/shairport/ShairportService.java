@@ -2,7 +2,6 @@ package com.tingting.shairport;
 
 import android.app.Notification;
 import android.app.Service;
-import android.content.Context;
 import android.content.Intent;
 import android.net.wifi.WifiManager;
 import android.os.IBinder;
@@ -81,14 +80,14 @@ public class ShairportService extends Service {
 
     private void acquireLocks() {
         try {
-            WifiManager wm = (WifiManager) getSystemService(Context.WIFI_SERVICE);
+            WifiManager wm = (WifiManager) getSystemService(WIFI_SERVICE);
             mcastLock = wm.createMulticastLock("shairport-mdns");
             mcastLock.setReferenceCounted(false);
             mcastLock.acquire();
             wifiLock = wm.createWifiLock(WifiManager.WIFI_MODE_FULL, "shairport-wifi");
             wifiLock.setReferenceCounted(false);
             wifiLock.acquire();
-            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+            PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
             wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "shairport-cpu");
             wakeLock.setReferenceCounted(false);
             wakeLock.acquire();
@@ -132,7 +131,6 @@ public class ShairportService extends Service {
         dst.setReadable(true, false);
     }
 
-    /** 应用被强杀后遗留的 shairport-sync 孤儿进程(同 uid)会占着 5000 端口, 启动前先清掉 */
     private void killStale(String binPath) {
         try {
             Process p = Runtime.getRuntime().exec("ps");
@@ -195,7 +193,7 @@ public class ShairportService extends Service {
                 sleep(3000);
             }
             if (!running) break;
-            sleep(3000); // 让 DHCP/路由稳定
+            sleep(3000);
 
             try {
                 ProcessBuilder pb = new ProcessBuilder(bin.getPath(), "-c", conf.getPath(), "-o", "alsa");
@@ -203,10 +201,11 @@ public class ShairportService extends Service {
                 Map<String, String> env = pb.environment();
                 env.put("TMPDIR", dir.getPath());
                 pb.redirectErrorStream(true);
-                proc = pb.start();
+                Process running = pb.start();
+                proc = running;
                 Log.i(TAG, "shairport-sync started");
 
-                InputStream is = proc.getInputStream();
+                InputStream is = running.getInputStream();
                 byte[] buf = new byte[4096];
                 OutputStream lo = new FileOutputStream(log, false);
                 long written = 0;
@@ -221,7 +220,7 @@ public class ShairportService extends Service {
                     written += r;
                 }
                 lo.close();
-                int code = proc.waitFor();
+                int code = running.waitFor();
                 Log.w(TAG, "shairport-sync exited with " + code);
             } catch (Exception e) {
                 Log.e(TAG, "run failed", e);

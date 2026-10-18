@@ -66,7 +66,7 @@ python dlna_play.py "http://example.com/a.mp3" 8             # 指定 URL 播放
 - 开机时 Wi-Fi 可能还没拿到 IP,服务里要等到有 IPv4 再启动;`killStale()` 清理上次遗留的 shairport-sync,否则占着 5000 端口。
 
 ### AirPlay (shairport-sync 4.3.7)
-- 使用 musl 全静态链接(`--with-alsa --with-ssl=openssl --with-tinysvcmdns --with-soxr`)。glibc 静态+mDNS 体验差,musl + tinysvcmdns 不需要 avahi。
+- 使用 musl 全静态链接(`--with-alsa --with-ssl=openssl --with-tinysvcmdns --with-soxr`)。tinysvcmdns 内置 mDNS,设备上不需要 avahi。
 - 默认 `-static-pie` 在设备上会出问题,改成 `-static -no-pie`。
 - 声卡是 `SUNXI-I2S1`(`hw:1,0`),驱动接受 44100 但硬件实际跑 48000。**必须用 plug 设备做重采样**(`pcm.sp48` 内嵌在二进制里),否则每约 0.5 秒出现同步错误和爆音。
 - 驱动只在每个 period 更新 hw_ptr,默认 period 很大。**必须调高 `start_threshold`**(补丁,默认 4096 帧),否则一开始就 XRUN,表现是爆裂声和一顿一顿。
@@ -89,6 +89,34 @@ python dlna_play.py "http://example.com/a.mp3" 8             # 指定 URL 播放
 - 脚本用 LF;WSL 中的 `apksigner` 要用 `java -jar` 调用。
 - 崩溃处理器打印 `CRASH sig=... pc=...`,用 `addr.sh` 配合未 strip 的二进制 `addr2line` 定位。
 - 先用 `/sdcard` 本地文件验证播放,再排查网络和 TLS;Windows 防火墙会挡住设备回连 PC 的 HTTP 服务。
+
+## Gemini 9420 语音 (独立 APK)
+
+与 **AirPlay/DLNA** 分离: 构建 `gemini-voice-app/build-apk.sh` → `dist/GeminiVoice9420.apk`，包名 `com.tingting.gemini9420`。
+
+1. 安装并写配置: `/data/data/com.tingting.gemini9420/files/gemini.properties`（字段 `gemini_key`、`gemini_api_url` 等）。
+2. 唤醒桥 `voice-wake-bridge.sh`（root logcat）广播 `com.tingting.gemini9420.action.WAKE_9420`；环境变量 `ADAPTER_POLICY=full|subproc|none` 控制是否杀 adapter（见 `adapter-probe.sh`）。
+3. 手动试: `adb shell am broadcast -a com.tingting.gemini9420.action.WAKE_9420 -n com.tingting.gemini9420/.WakeReceiver`
+
+AirPlay APK (`autostart-app`) 不再包含麦克风或 Gemini 代码。
+
+### Adapter 补丁 (9420 内嵌广播 Gemini)
+
+`adapter-mod/`：从设备 pull 原厂 `miaAdapter*.apk`，在 `MiaOsStateMachine.onWakeup` 主唤醒词分支广播 `WAKE_9420`，不再走腾讯云端会话。
+
+```bash
+# WSL — 日常只改 Gemini 时勿 push 66MB adapter，用 deploy 脚本（md5 跳过 + gzip 压缩）
+DEVICE=192.168.2.224:5555 ./scripts/deploy-gemini9420.sh gemini    # 语音 APK
+DEVICE=192.168.2.224:5555 ./scripts/deploy-gemini9420.sh adapter  # 仅改 adapter 时
+# Windows: .\scripts\deploy-gemini9420.ps1 -Mode gemini
+
+adapter-mod/pull-vendor.sh          # 首次 pull 原厂包
+# 手动全量（不推荐每次）:
+# adb push adapter-mod/out/miaAdapter-patched-keepcert.apk /data/local/tmp/
+# adb shell sh /data/local/tmp/install-patched-adapter.sh && adb reboot
+```
+
+补丁后可将 `voice-wake-bridge.sh` 的 `ADAPTER_POLICY=none`（不必 force-stop）。原厂包备份为 `/system/app/miaAdapterGA1.3-3020028.apk.bak`。
 
 ## 已知限制
 - 只有 AirPlay 1(不是 AirPlay 2)。
